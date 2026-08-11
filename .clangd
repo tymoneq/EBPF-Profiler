@@ -1,0 +1,16 @@
+CompileFlags:
+  Add:
+    # Flagi specyficzne dla eBPF
+    - "-target"
+    - "bpf"
+    - "-D__TARGET_ARCH_x86"
+    
+    # Standardowe flagi optymalizacji i debugowania (wymagane przez eBPF)
+    - "-O2"
+    - "-g"
+    - "-Wall"
+    
+    # Ścieżki do nagłówków
+    - "-I."                  # Tutaj clangd znajdzie Twój lokalny vmlinux.h
+    - "-I/usr/include"       # Główne nagłówki
+    - "-I/usr/include/bpf"   # Nagłówki z libbpf (bpf_helpers.h itp.)
