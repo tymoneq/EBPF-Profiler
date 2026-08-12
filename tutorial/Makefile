@@ -4,21 +4,20 @@ TARGET_EBPF := $(TARGET).bpf.o
 GO_SRC := *.go
 BPF_SCR := *.bpf.c
 
-LIBBPF_HEADERS := /usr/include/bpf
-LIBBPF_OBJ := /usr/lib/libbpf.a
+.PHONY: all clean
 
-.PHONY: all
+all: $(TARGET_EBPF) $(TARGET)
 
-all: $(TARGET) $(TARGET_EBPF)
+# Używamy -lbpf aby dynamicznie zlinkować bibliotekę z systemem
+go_env := CC=clang CGO_CFLAGS="-I/usr/include/bpf" CGO_LDFLAGS="-lbpf"
 
-go_env := CC=clang CGO_CFLAGS="-I $(LIBBPF_HEADERS)" CGO_LDFLAGS="$(LIBBOF_OBJ)"
-
-$(TARGET): $(GO_SRC)
+# Wymuś najpierw kompilację kodu BPF zanim skompilujesz Go
+$(TARGET): $(GO_SRC) $(TARGET_EBPF)
 	$(go_env) go build -o $(TARGET)
 
 $(TARGET_EBPF): $(BPF_SCR)
-	clang -O2 -target bpf -D__TARGET_ARCH_x86 -c -o $@ $<
+	clang -g -O2 -target bpf -D__TARGET_ARCH_x86 -c -o $@ $<
 
-.PHONY: clean
 clean:
 	go clean
+	rm -f $(TARGET_EBPF)
