@@ -16,8 +16,12 @@ import (
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
-	bpfMapSwitchCounts       = "switch_counts"
-	bpfProgHandleSchedSwitch = "handle_sched_switch"
+	bpfMapIoHistogram            = "io_histogram"
+	bpfMapStartTimes             = "start_times"
+	bpfMapSwitchCounts           = "switch_counts"
+	bpfProgHandleBlockRqComplete = "handle_block_rq_complete"
+	bpfProgHandleBlockRqIssue    = "handle_block_rq_issue"
+	bpfProgHandleSchedSwitch     = "handle_sched_switch"
 )
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -62,13 +66,17 @@ type bpfSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
-	HandleSchedSwitch *ebpf.ProgramSpec `ebpf:"handle_sched_switch"`
+	HandleBlockRqComplete *ebpf.ProgramSpec `ebpf:"handle_block_rq_complete"`
+	HandleBlockRqIssue    *ebpf.ProgramSpec `ebpf:"handle_block_rq_issue"`
+	HandleSchedSwitch     *ebpf.ProgramSpec `ebpf:"handle_sched_switch"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
+	IoHistogram  *ebpf.MapSpec `ebpf:"io_histogram"`
+	StartTimes   *ebpf.MapSpec `ebpf:"start_times"`
 	SwitchCounts *ebpf.MapSpec `ebpf:"switch_counts"`
 }
 
@@ -98,11 +106,15 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
+	IoHistogram  *ebpf.Map `ebpf:"io_histogram"`
+	StartTimes   *ebpf.Map `ebpf:"start_times"`
 	SwitchCounts *ebpf.Map `ebpf:"switch_counts"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
+		m.IoHistogram,
+		m.StartTimes,
 		m.SwitchCounts,
 	)
 }
@@ -117,11 +129,15 @@ type bpfVariables struct {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
-	HandleSchedSwitch *ebpf.Program `ebpf:"handle_sched_switch"`
+	HandleBlockRqComplete *ebpf.Program `ebpf:"handle_block_rq_complete"`
+	HandleBlockRqIssue    *ebpf.Program `ebpf:"handle_block_rq_issue"`
+	HandleSchedSwitch     *ebpf.Program `ebpf:"handle_sched_switch"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
+		p.HandleBlockRqComplete,
+		p.HandleBlockRqIssue,
 		p.HandleSchedSwitch,
 	)
 }
