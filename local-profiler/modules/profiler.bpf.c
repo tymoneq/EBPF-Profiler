@@ -1,9 +1,10 @@
 //go:build ignore
 
-#include <linux/bpf.h>
+#include "../include/vmlinux.h"
 // linux/bpf.h need to be first inport
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
+
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -13,53 +14,62 @@ struct {
 
 } switch_counts SEC(".maps");
 
-// Mapa przechowująca czasy rozpoczęcia operacji I/O
-struct {
-  __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 10240);
-  __type(key, struct request*);
-  __type(value, __u64);
-} start_times SEC(".maps");
+struct io_stats {
+  __u64 read_bytes;
+  __u64 write_bytes;
+  __u64 read_count;
+  __u64 write_count;
+};
 
 // Mapa histogramu (np. 32 przedziały czasowe)
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-  __uint(max_entries, 32);
+  __uint(max_entries, 10240);
   __type(key, __u32);
-  __type(value, __u64);
-} io_histogram SEC(".maps");
+  __type(value, struct io_stats);
+} process_io_stats SEC(".maps");
 
-// disk send request
-SEC("tp_btf/block_rq_issue")
-int BPF_PROG(handle_block_rq_issue, struct request* rq) {
-  __u64 ts = bpf_ktime_get_ns();
-
-  bpf_map_update_elem(&start_times, &rq, &ts, BPF_ANY);
-  return 0;
-}
-
-SEC("tp_btf/block_rq_complete")
-int BPF_PROG(handle_block_rq_complete,
-             struct request* rq,
-             int error,
-             unsigned int nr_bytes) {
-  __u64 *start_ts, delta_us;
-  __u32 slot;
-
-  start_ts = bpf_map_lookup_elem(&start_times, &rq);
-  if (start_ts == NULL)
+SEC("kretprobe/vfs_read")
+int BPF_KRETPROBE(vfs_read_ret, long ret) {
+  if (ret <= 0)
     return 0;
 
-  delta_us = (bpf_ktime_get_ns() - *start_ts) / 1000;
+  __u64 pid_tgid = bpf_get_current_pid_tgid();
+  __u32 pid = pid_tgid >> 32;
 
-  slot = 64 - __builtin_clzll(delta_us);
-  if (slot >= 32)
-    slot = 31;
-
-  __u64* count = bpf_map_lookup_elem(&io_histogram, &slot);
-  if (count != NULL)
-    *count += 1;
+  struct io_stats* stats = bpf_map_lookup_elem(&process_io_stats, &pid);
+  if (stats != NULL) {
+    stats->read_bytes += ret;
+    stats->read_count += 1;
+  } else {
+    struct io_stats new_stats = {
+        .read_bytes = ret, .read_count = 1, .write_bytes = 0, .write_count = 0};
+    bpf_map_update_elem(&process_io_stats, &pid, &new_stats, BPF_ANY);
+  }
   return 0;
+
+}
+
+
+SEC("kretprobe/vfs_write")
+int BPF_KRETPROBE(vfs_write_ret, long ret) {
+  if (ret <= 0)
+    return 0;
+
+  __u64 pid_tgid = bpf_get_current_pid_tgid();
+  __u32 pid = pid_tgid >> 32;
+
+  struct io_stats* stats = bpf_map_lookup_elem(&process_io_stats, &pid);
+  if (stats != NULL) {
+    stats->write_bytes += ret;
+    stats->write_count += 1;
+  } else {
+    struct io_stats new_stats = {
+        .read_bytes = 0, .read_count = 0, .write_bytes = ret, .write_count = 1};
+    bpf_map_update_elem(&process_io_stats, &pid, &new_stats, BPF_ANY);
+  }
+  return 0;
+
 }
 
 // context switches

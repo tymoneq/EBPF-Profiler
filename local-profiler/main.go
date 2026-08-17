@@ -35,6 +35,10 @@ func main() {
 		}
 	}()
 
+	go func() {
+		obj.GetDiskLatency()
+	}()
+
 	select {
 	case sig := <-sigChan:
 		fmt.Printf("\nReceived OS signal (%s). Shutting down gracefully...\n", sig)

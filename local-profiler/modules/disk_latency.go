@@ -3,24 +3,31 @@ package modules
 import (
 	"fmt"
 	"log"
-	"math"
 	"time"
 
 	"github.com/cilium/ebpf/link"
 )
 
+type IOStats struct {
+	ReadBytes  uint64
+	WriteBytes uint64
+	ReadCount  uint64
+	WriteCount uint64
+}
+
 func (o BPFObject) GetDiskLatency() {
-	tpIssue, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleBlockRqIssue})
+
+	tpIssue, err := link.Kretprobe("vfs_read", o.Objs.VfsReadRet, nil)
 
 	if err != nil {
-		log.Fatalf("Error hooking rq_issue %v\n", err)
+		log.Fatalf("Error hooking vfs read %v\n", err)
 	}
 	defer tpIssue.Close()
 
-	tpComplete, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleBlockRqComplete})
+	tpComplete, err := link.Kretprobe("vfs_write", o.Objs.VfsWriteRet, nil)
 
 	if err != nil {
-		log.Fatalf("Error hooking rq_complete: %v\n", err)
+		log.Fatalf("Error hooking vfs write: %v\n", err)
 	}
 	defer tpComplete.Close()
 
@@ -31,25 +38,21 @@ func (o BPFObject) GetDiskLatency() {
 
 	for range ticker.C {
 		fmt.Println("\n-----Histogram of delays ------")
-		var slot uint32
-		var perCPUValues []uint64
+		var pid uint32
+		var perCPUValues []IOStats
 
-		iter := o.Objs.IoHistogram.Iterate()
-		for iter.Next(&slot, &perCPUValues) {
-
-			var totalCount uint64 = 0
-			for _, coreCount := range perCPUValues {
-				totalCount += coreCount
+		iter := o.Objs.ProcessIoStats.Iterate()
+		for iter.Next(&pid, &perCPUValues) {
+			var totalCount IOStats
+			for _, val := range perCPUValues {
+				totalCount.ReadBytes += val.ReadBytes
+				totalCount.ReadCount += val.ReadCount
+				totalCount.WriteBytes += val.WriteBytes
+				totalCount.WriteCount += val.WriteCount
 			}
-			if totalCount > 0 {
-				lowerBound := uint64(0)
-				if slot > 0 {
-					lowerBound = uint64(math.Pow(2, float64(slot-1)))
-				}
-				upperBound := uint64(math.Pow(2, float64(slot)))
-				fmt.Printf("[%6d us - %6d us] : %d operacji I/O\n", lowerBound, upperBound, totalCount)
+			if totalCount.ReadBytes > 0 || totalCount.WriteBytes > 0 {
+				fmt.Printf("Data for %d pid : \n Total ReadBytes : %d, Total ReadCount : %d, Total WriteBytes : %d, Total WriteCount %d\n", pid, totalCount.ReadBytes, totalCount.ReadCount, totalCount.WriteBytes, totalCount.WriteCount)
 			}
-
 		}
 
 	}
