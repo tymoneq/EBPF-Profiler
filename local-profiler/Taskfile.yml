@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  build_ebpf:
+    cmds:
+      - go generate ./modules
+
+  build:
+    cmds:
+      - go-task build_ebpf
+      - go build -o app
+
+  clean:
+    cmds:
+      - rm -f ./modules/*_bpfel.* app
