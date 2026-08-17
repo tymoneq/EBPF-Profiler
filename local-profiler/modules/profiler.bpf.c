@@ -5,9 +5,8 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-
 struct {
-  __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+  __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
   __uint(max_entries, 10240);
   __type(key, __u32);
   __type(value, __u64);
@@ -23,7 +22,7 @@ struct io_stats {
 
 // Mapa histogramu (np. 32 przedziały czasowe)
 struct {
-  __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+  __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
   __uint(max_entries, 10240);
   __type(key, __u32);
   __type(value, struct io_stats);
@@ -47,9 +46,7 @@ int BPF_KRETPROBE(vfs_read_ret, long ret) {
     bpf_map_update_elem(&process_io_stats, &pid, &new_stats, BPF_ANY);
   }
   return 0;
-
 }
-
 
 SEC("kretprobe/vfs_write")
 int BPF_KRETPROBE(vfs_write_ret, long ret) {
@@ -69,7 +66,6 @@ int BPF_KRETPROBE(vfs_write_ret, long ret) {
     bpf_map_update_elem(&process_io_stats, &pid, &new_stats, BPF_ANY);
   }
   return 0;
-
 }
 
 // context switches
@@ -81,7 +77,10 @@ SEC("tracepoint/sched/sched_switch") int handle_sched_switch(void* ctx) {
 
   if (count != NULL)
     *count += 1;
-
+  else {
+    __u64 initial_count = 1;
+    bpf_map_update_elem(&switch_counts, &pid, &initial_count, BPF_ANY);
+  }
   return 0;
 }
 

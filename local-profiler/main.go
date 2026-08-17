@@ -1,21 +1,25 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"local-profiler/modules"
 	"log"
-	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
 )
 
 func main() {
-	const NUMBER_OF_GO_ROUTINES int32 = 1
+	const NUMBER_OF_GO_ROUTINES int32 = 2
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+
+	defer stop()
+	var wg sync.WaitGroup
+	wg.Add(int(NUMBER_OF_GO_ROUTINES))
 
 	errChan := make(chan error, NUMBER_OF_GO_ROUTINES)
 
@@ -30,22 +34,21 @@ func main() {
 	defer obj.Objs.Close()
 
 	go func() {
-		if err := obj.ContextSwitches(); err != nil {
+		if err := obj.ContextSwitches(&ctx, &wg); err != nil {
 			errChan <- err
 		}
 	}()
 
 	go func() {
-		obj.GetDiskLatency()
+		if err := obj.GetDiskLatency(&ctx, &wg); err != nil {
+			errChan <- err
+		}
 	}()
 
-	select {
-	case sig := <-sigChan:
-		fmt.Printf("\nReceived OS signal (%s). Shutting down gracefully...\n", sig)
+	<-ctx.Done()
+	fmt.Println("\nMain: Shutdown signal received. Waiting for goroutines to save files...")
 
-	}
-
-	// Add your cleanup logic here (closing DBs, flushing logs, etc.)
+	wg.Wait()
 	fmt.Println("Cleanup complete. Goodbye.")
 
 }

@@ -1,15 +1,18 @@
 package modules
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 )
 
-func (o BPFObject) ContextSwitches() error {
+func (o BPFObject) ContextSwitches(ctx *context.Context, wg *sync.WaitGroup) error {
+	defer wg.Done()
 
 	outFile, err := OpenFile("contexStiches.log")
 	if err != nil {
@@ -34,28 +37,40 @@ func (o BPFObject) ContextSwitches() error {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		var pid uint32
-		var perCpuCount []uint64
-		var iter = o.Objs.SwitchCounts.Iterate()
 
-		outFile.WriteString("---Active processes (Top context switches)---\n")
+		select {
+		case <-(*ctx).Done():
+			fmt.Println("closing context switches")
+			return nil
 
-		for iter.Next(&pid, &perCpuCount) {
+		default:
+			t := time.Now()
+			t.Format("2006-01-02 15:04:05")
 
-			var totalCount uint64 = 0
-			for _, coreCount := range perCpuCount {
-				totalCount += coreCount
-			}
+			outFile.WriteString("---Active processes (Top context switches)---")
+			outFile.Write([]byte(t.String()))
+			outFile.WriteString("\n")
 
-			if totalCount > 0 {
-				myString := fmt.Sprintf("PID: %d | Number of context switches: %d\n", pid, totalCount)
-				outFile.WriteString(myString)
-			}
+			var pid uint32
+			var perCpuCount []uint64
+			var iter = o.Objs.SwitchCounts.Iterate()
 
-			err := o.Objs.SwitchCounts.Update(pid, zeroValues, ebpf.UpdateAny)
-			if err != nil {
-				log.Printf("Failed to reset key %d: %v", pid, err)
-				return err
+			for iter.Next(&pid, &perCpuCount) {
+
+				var totalCount uint64 = 0
+				for _, coreCount := range perCpuCount {
+					totalCount += coreCount
+				}
+				if totalCount > 0 {
+					myString := fmt.Sprintf("PID: %d | Number of context switches: %d\n", pid, totalCount)
+					outFile.WriteString(myString)
+				}
+
+				err := o.Objs.SwitchCounts.Update(pid, zeroValues, ebpf.UpdateAny)
+				if err != nil {
+					log.Printf("Failed to reset key %d: %v", pid, err)
+					return err
+				}
 			}
 		}
 
