@@ -71,6 +71,8 @@ func (o BPFObject) GetDiskLatency(ctx *context.Context, wg *sync.WaitGroup) erro
 
 			iter := o.Objs.ProcessIoStats.Iterate()
 			for iter.Next(&pid, &perCPUValues) {
+				userName := getUserForPID(pid)
+
 				var totalCount IOStats
 				for _, val := range perCPUValues {
 					totalCount.ReadBytes += val.ReadBytes
@@ -79,7 +81,7 @@ func (o BPFObject) GetDiskLatency(ctx *context.Context, wg *sync.WaitGroup) erro
 					totalCount.WriteCount += val.WriteCount
 				}
 				if totalCount.ReadBytes > 0 || totalCount.WriteBytes > 0 {
-					myString := fmt.Sprintf("Data for %d pid : \n Total ReadBytes : %d, Total ReadCount : %d, Total WriteBytes : %d, Total WriteCount %d\n", pid, totalCount.ReadBytes, totalCount.ReadCount, totalCount.WriteBytes, totalCount.WriteCount)
+					myString := fmt.Sprintf("Data for %d pid, UserId - %s : \n Total ReadBytes : %d, Total ReadCount : %d, Total WriteBytes : %d, Total WriteCount %d\n", pid, userName, totalCount.ReadBytes, totalCount.ReadCount, totalCount.WriteBytes, totalCount.WriteCount)
 					outFile.WriteString(myString)
 				}
 				err := o.Objs.ProcessIoStats.Update(pid, zeroValues, ebpf.UpdateAny)

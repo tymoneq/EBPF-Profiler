@@ -56,13 +56,14 @@ func (o BPFObject) ContextSwitches(ctx *context.Context, wg *sync.WaitGroup) err
 			var iter = o.Objs.SwitchCounts.Iterate()
 
 			for iter.Next(&pid, &perCpuCount) {
+				userName := getUserForPID(pid)
 
 				var totalCount uint64 = 0
 				for _, coreCount := range perCpuCount {
 					totalCount += coreCount
 				}
 				if totalCount > 0 {
-					myString := fmt.Sprintf("PID: %d | Number of context switches: %d\n", pid, totalCount)
+					myString := fmt.Sprintf("PID: %d , UserName : %s | Number of context switches: %d\n", pid, userName, totalCount)
 					outFile.WriteString(myString)
 				}
 
