@@ -10,6 +10,14 @@ import (
 )
 
 func (o BPFObject) ContextSwitches() error {
+
+	outFile, err := OpenFile("contexStiches.log")
+	if err != nil {
+		log.Printf("Error opening a file : %v\n", err)
+		return err
+	}
+	defer outFile.Close()
+
 	numCPUs, err := ebpf.PossibleCPU()
 	zeroValues := make([]uint64, numCPUs)
 
@@ -30,7 +38,7 @@ func (o BPFObject) ContextSwitches() error {
 		var perCpuCount []uint64
 		var iter = o.Objs.SwitchCounts.Iterate()
 
-		fmt.Println("---Active processes (Top context switches)---")
+		outFile.WriteString("---Active processes (Top context switches)---\n")
 
 		for iter.Next(&pid, &perCpuCount) {
 
@@ -40,7 +48,8 @@ func (o BPFObject) ContextSwitches() error {
 			}
 
 			if totalCount > 0 {
-				fmt.Printf("PID: %d | Number of context switches: %d\n", pid, totalCount)
+				myString := fmt.Sprintf("PID: %d | Number of context switches: %d\n", pid, totalCount)
+				outFile.WriteString(myString)
 			}
 
 			err := o.Objs.SwitchCounts.Update(pid, zeroValues, ebpf.UpdateAny)
