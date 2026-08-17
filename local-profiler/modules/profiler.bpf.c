@@ -6,7 +6,7 @@
 #include <bpf/bpf_tracing.h>
 
 struct {
-  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
   __uint(max_entries, 10240);
   __type(key, __u32);
   __type(value, __u64);
@@ -69,12 +69,8 @@ SEC("tracepoint/sched/sched_switch") int handle_sched_switch(void* ctx) {
 
   __u64* count = bpf_map_lookup_elem(&switch_counts, &pid);
 
-  if (count) {
-    __sync_fetch_and_add(count, 1);
-  } else {
-    __u64 initial = 1;
-    bpf_map_update_elem(&switch_counts, &pid, &initial, BPF_ANY);
-  }
+  if (count != NULL)
+    *count += 1;
 
   return 0;
 }
