@@ -1,14 +1,11 @@
 package modules
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
 )
 
 type IOStats struct {
@@ -18,11 +15,10 @@ type IOStats struct {
 	WriteCount uint64
 }
 
-func (o BPFObject) GetDiskLatency(ctx *context.Context, wg *sync.WaitGroup) error {
-	defer wg.Done()
+func (o BPFObject) GetDiskLatency(sync *SyncStruct) error {
+	defer sync.Wg.Done()
 
-	numCPUs, err := ebpf.PossibleCPU()
-	zeroValues := make([]IOStats, numCPUs)
+	zeroValues := make([]IOStats, o.NumCPUs)
 
 	outFile, err := OpenFile("IOReadWrite.log")
 	if err != nil {
@@ -30,22 +26,6 @@ func (o BPFObject) GetDiskLatency(ctx *context.Context, wg *sync.WaitGroup) erro
 		return err
 	}
 	defer outFile.Close()
-
-	tpIssue, err := link.Kretprobe("vfs_read", o.Objs.VfsReadRet, nil)
-
-	if err != nil {
-		log.Fatalf("Error hooking vfs read %v\n", err)
-		return err
-	}
-	defer tpIssue.Close()
-
-	tpComplete, err := link.Kretprobe("vfs_write", o.Objs.VfsWriteRet, nil)
-
-	if err != nil {
-		log.Fatalf("Error hooking vfs write: %v\n", err)
-		return err
-	}
-	defer tpComplete.Close()
 
 	fmt.Println("I/O profiler started. Collecting data...")
 
@@ -55,7 +35,7 @@ func (o BPFObject) GetDiskLatency(ctx *context.Context, wg *sync.WaitGroup) erro
 	for range ticker.C {
 
 		select {
-		case <-(*ctx).Done():
+		case <-sync.Ctx.Done():
 			fmt.Println("Cleaning disk latency")
 			return nil
 

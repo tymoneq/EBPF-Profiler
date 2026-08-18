@@ -12,16 +12,43 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-func main() {
-	const NUMBER_OF_GO_ROUTINES int32 = 2
+const NUMBER_OF_GO_ROUTINES int32 = 2
 
+func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
-	defer stop()
 	var wg sync.WaitGroup
 	wg.Add(int(NUMBER_OF_GO_ROUTINES))
 
+	sync := &modules.SyncStruct{
+		Ctx: ctx,
+		Wg:  wg,
+	}
+
+	return sync, stop
+}
+
+func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan<- error) {
+
+	go func() {
+		if err := obj.ContextSwitches(sync); err != nil {
+			errChan <- err
+		}
+	}()
+
+	go func() {
+		if err := obj.GetDiskLatency(sync); err != nil {
+			errChan <- err
+		}
+	}()
+}
+
+func main() {
+
 	errChan := make(chan error, NUMBER_OF_GO_ROUTINES)
+
+	sync, stop := createSignalHandling()
+	defer stop()
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatalf("Error with memory limits %v\n", err)
@@ -33,22 +60,28 @@ func main() {
 	}
 	defer obj.Objs.Close()
 
-	go func() {
-		if err := obj.ContextSwitches(&ctx, &wg); err != nil {
-			errChan <- err
+	arr, err := obj.LoadAllTracepoints()
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		for _, l := range arr {
+			l.Close()
 		}
 	}()
 
-	go func() {
-		if err := obj.GetDiskLatency(&ctx, &wg); err != nil {
-			errChan <- err
-		}
-	}()
+	runGoRoutines(obj, sync, errChan)
+	select {
+	case <-sync.Ctx.Done():
+		fmt.Println("\nMain: Shutdown signal received. Waiting for goroutines to save files...")
 
-	<-ctx.Done()
-	fmt.Println("\nMain: Shutdown signal received. Waiting for goroutines to save files...")
+	case err := <-errChan:
+		fmt.Printf("\nMain: Error in the profiler %v\n", err)
+		stop()
+	}
+	sync.Wg.Wait()
 
-	wg.Wait()
 	fmt.Println("Cleanup complete. Goodbye.")
 
 }
