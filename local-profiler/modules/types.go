@@ -3,7 +3,6 @@ package modules
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/cilium/ebpf/link"
@@ -19,11 +18,20 @@ type BPFObject struct {
 
 type SyncStruct struct {
 	Ctx context.Context
-	Wg  sync.WaitGroup
+	Wg  *sync.WaitGroup
 }
 
 func LoadBPFObjects(o *bpfObjects) error {
 	return loadBpfObjects(o, nil)
+}
+
+func appendTracepoint(err error, tp *link.Link, arr *[]link.Link) error {
+	if err != nil {
+		fmt.Printf("Couldn't pin tracepoint: %v \n", err)
+		return err
+	}
+	*arr = append(*arr, *tp)
+	return nil
 }
 
 func (o *BPFObject) LoadAllTracepoints() ([]link.Link, error) {
@@ -31,27 +39,24 @@ func (o *BPFObject) LoadAllTracepoints() ([]link.Link, error) {
 	arr := make([]link.Link, 0, 10)
 
 	tp, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleSchedSwitch})
-	if err != nil {
-		fmt.Printf("Couldn't pin tracepoint: %v \n", err)
+	if err := appendTracepoint(err, &tp, &arr); err != nil {
 		return nil, err
 	}
-	arr = append(arr, tp)
+
+	sched_wakeup, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleSchedWakeup})
+	if err := appendTracepoint(err, &sched_wakeup, &arr); err != nil {
+		return nil, err
+	}
 
 	tpIssue, err := link.Kretprobe("vfs_read", o.Objs.VfsReadRet, nil)
-
-	if err != nil {
-		log.Fatalf("Error hooking vfs read %v\n", err)
+	if err := appendTracepoint(err, &tpIssue, &arr); err != nil {
 		return nil, err
 	}
-	arr = append(arr, tpIssue)
 
 	tpComplete, err := link.Kretprobe("vfs_write", o.Objs.VfsWriteRet, nil)
-
-	if err != nil {
-		log.Fatalf("Error hooking vfs write: %v\n", err)
+	if err := appendTracepoint(err, &tpComplete, &arr); err != nil {
 		return nil, err
 	}
-	arr = append(arr, tpComplete)
 
 	return arr, nil
 }

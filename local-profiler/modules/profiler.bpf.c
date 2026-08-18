@@ -83,8 +83,12 @@ int BPF_PROG(handle_sched_switch,
       slot = 31;
 
     u64* hist_count = bpf_map_lookup_elem(&runq_histogram, &slot);
-    if (hist_count != NULL)
+    if (hist_count != NULL) {
       *hist_count += 1;
+    } else {
+     __u64 initial_count = 1;
+      bpf_map_update_elem(&runq_histogram, &slot, &initial_count, BPF_ANY);
+    }
     bpf_map_delete_elem(&sched_times, &next_tid);
   }
   return 0;

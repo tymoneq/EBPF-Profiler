@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-const NUMBER_OF_GO_ROUTINES int32 = 2
+const NUMBER_OF_GO_ROUTINES int32 = 3
 
 func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -22,7 +22,7 @@ func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 
 	sync := &modules.SyncStruct{
 		Ctx: ctx,
-		Wg:  wg,
+		Wg:  &wg,
 	}
 
 	return sync, stop
@@ -38,6 +38,12 @@ func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan
 
 	go func() {
 		if err := obj.GetDiskLatency(sync); err != nil {
+			errChan <- err
+		}
+	}()
+
+	go func() {
+		if err := obj.RunqLatency(sync); err != nil {
 			errChan <- err
 		}
 	}()
