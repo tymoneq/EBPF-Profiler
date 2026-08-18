@@ -32,15 +32,15 @@ func (o BPFObject) GetDiskLatency(sync *SyncStruct) error {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
 
 		select {
 		case <-sync.Ctx.Done():
 			fmt.Println("Cleaning disk latency")
 			return nil
 
-		default:
-			t := time.Now()
+		case t := <-ticker.C:
+			t = time.Now()
 			t.Format("2006-01-02 15:04:05")
 
 			outFile.WriteString("Data from the Kernel: ")
@@ -73,5 +73,4 @@ func (o BPFObject) GetDiskLatency(sync *SyncStruct) error {
 		}
 
 	}
-	return nil
 }

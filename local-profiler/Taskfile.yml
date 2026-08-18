@@ -17,4 +17,4 @@ tasks:
       - rm -f ./modules/*_bpfel.* app *.log
   clean_logs:
     cmds:
-     - rm -f *.log
+     - rm -f logs/*.log

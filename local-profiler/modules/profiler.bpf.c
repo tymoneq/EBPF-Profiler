@@ -5,9 +5,11 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
+#define MAX_ENTRIES 10240
+
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 10240);
+  __uint(max_entries, MAX_ENTRIES);
   __type(key, __u32);
   __type(value, __u64);
 
@@ -22,7 +24,7 @@ struct {
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
-  __uint(max_entries, 10240);
+  __uint(max_entries, MAX_ENTRIES);
   __type(key, __u32);
   __type(value, __u64);
 
@@ -37,10 +39,17 @@ struct io_stats {
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
-  __uint(max_entries, 10240);
+  __uint(max_entries, MAX_ENTRIES);
   __type(key, __u32);
   __type(value, struct io_stats);
 } process_io_stats SEC(".maps");
+
+struct {
+  __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+  __uint(max_entries, MAX_ENTRIES);
+  __type(key, __u32);
+  __type(value, __u64);
+} cache_misses SEC(".maps");
 
 // runq latency
 SEC("tp_btf/sched_wakeup")
@@ -86,7 +95,7 @@ int BPF_PROG(handle_sched_switch,
     if (hist_count != NULL) {
       *hist_count += 1;
     } else {
-     __u64 initial_count = 1;
+      __u64 initial_count = 1;
       bpf_map_update_elem(&runq_histogram, &slot, &initial_count, BPF_ANY);
     }
     bpf_map_delete_elem(&sched_times, &next_tid);
@@ -132,6 +141,22 @@ int BPF_KRETPROBE(vfs_write_ret, long ret) {
         .read_bytes = 0, .read_count = 0, .write_bytes = ret, .write_count = 1};
     bpf_map_update_elem(&process_io_stats, &pid, &new_stats, BPF_ANY);
   }
+  return 0;
+}
+
+SEC("perf_event")
+int handle_cache_misses(struct bpf_perf_event_data* ctx) {
+  u64 pit_tgid = bpf_get_current_pid_tgid();
+  u32 pid = pit_tgid >> 32;
+
+  u64* count = bpf_map_lookup_elem(&cache_misses, &pid);
+  if (count != NULL) {
+    *count += 1;
+  } else {
+    u64 initial_count = 1;
+    bpf_map_update_elem(&cache_misses, &pid, &initial_count, BPF_ANY);
+  }
+
   return 0;
 }
 

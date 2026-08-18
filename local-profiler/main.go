@@ -6,13 +6,14 @@ import (
 	"local-profiler/modules"
 	"log"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
 )
 
-const NUMBER_OF_GO_ROUTINES int32 = 3
+const NUMBER_OF_GO_ROUTINES int32 = 4
 
 func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -47,6 +48,11 @@ func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan
 			errChan <- err
 		}
 	}()
+	go func() {
+		if err := obj.CacheMisses(sync); err != nil {
+			errChan <- err
+		}
+	}()
 }
 
 func main() {
@@ -61,6 +67,8 @@ func main() {
 	}
 
 	var obj modules.BPFObject
+	obj.NumCPUs = runtime.NumCPU()
+
 	if err := modules.LoadBPFObjects(&obj.Objs); err != nil {
 		log.Fatalf("Couldn't load eBPF objects : %v \n", err)
 	}

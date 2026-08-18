@@ -25,15 +25,14 @@ func (o BPFObject) ContextSwitches(sync *SyncStruct) error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-
+	for {
 		select {
 		case <-sync.Ctx.Done():
 			fmt.Println("closing context switches")
 			return nil
 
-		default:
-			t := time.Now()
+		case t := <-ticker.C:
+			t = time.Now()
 			t.Format("2006-01-02 15:04:05")
 
 			outFile.WriteString("---Active processes (Top context switches)---")
@@ -65,5 +64,4 @@ func (o BPFObject) ContextSwitches(sync *SyncStruct) error {
 		}
 
 	}
-	return nil
 }
