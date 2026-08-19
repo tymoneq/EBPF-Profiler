@@ -3,9 +3,6 @@ package modules
 import (
 	"fmt"
 	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -13,20 +10,6 @@ import (
 )
 
 const SAMPLE_PERIOD = 10_000
-
-func getDynamicPMUType(pmuName string) uint32 {
-	path := fmt.Sprintf("/sys/bus/event_source/devices/%s/type", pmuName)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return unix.PERF_TYPE_HARDWARE
-	}
-	str := strings.TrimSpace(string(data))
-	val, err := strconv.ParseUint(str, 10, 32)
-	if err != nil {
-		return unix.PERF_TYPE_HARDWARE
-	}
-	return uint32(val)
-}
 
 func (o BPFObject) CacheMisses(sync *SyncStruct) error {
 	defer sync.Wg.Done()
@@ -50,10 +33,6 @@ func (o BPFObject) CacheMisses(sync *SyncStruct) error {
 		}
 	}()
 
-	// Odczytujemy dynamiczne ID dla rdzeni hybrydowych
-	//pmuCore := getDynamicPMUType("cpu_core")
-	//pmuAtom := getDynamicPMUType("cpu_atom")
-
 	fmt.Printf("%d\n", o.NumCPUs)
 	for cpu := 0; cpu < o.NumCPUs; cpu++ {
 		attr := unix.PerfEventAttr{
@@ -64,17 +43,17 @@ func (o BPFObject) CacheMisses(sync *SyncStruct) error {
 
 		fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, 0)
 		if err != nil {
-			log.Fatalf("[!] WARNING: SKIPPED CPU %d (NO ACCESS TO PMU): %v\n", cpu, err)
+			log.Printf("[!] WARNING: SKIPPED CPU %d (NO ACCESS TO PMU): %v\n", cpu, err)
 			continue
 		}
 		err = unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_SET_BPF, o.Objs.HandleCacheMisses.FD())
 		if err != nil {
-			log.Fatalf("Error hooking eBPF to the counter: %v\n", err)
+			log.Printf("Error hooking eBPF to the counter: %v\n", err)
 			continue
 		}
 		err = unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_ENABLE, 0)
 		if err != nil {
-			log.Fatalf("Error ioctl Enable : %v\n", err)
+			log.Printf("Error ioctl Enable : %v\n", err)
 			continue
 		}
 		perfFDs = append(perfFDs, fd)

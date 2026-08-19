@@ -57,6 +57,10 @@ func (o *BPFObject) LoadAllTracepoints() ([]link.Link, error) {
 	if err := appendTracepoint(err, &tpComplete, &arr); err != nil {
 		return nil, err
 	}
+	pageFault, err := link.Kretprobe("handle_mm_fault", o.Objs.HandleMmFaultRet, nil)
+	if err := appendTracepoint(err, &pageFault, &arr); err != nil {
+		return nil, err
+	}
 
 	return arr, nil
 }

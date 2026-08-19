@@ -7,6 +7,13 @@
 
 #define MAX_ENTRIES 10240
 
+// Definiujemy flagi z jądra Linuxa (ponieważ vmlinux.h ich nie wyciąga)
+#define VM_FAULT_OOM 0x0001
+#define VM_FAULT_SIGBUS 0x0002
+#define VM_FAULT_MAJOR \
+  0x0010  // W starszych jądrach (np. 4.x) to mogło być 0x0004
+#define VM_FAULT_ERROR (VM_FAULT_OOM | VM_FAULT_SIGBUS)
+
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, MAX_ENTRIES);
@@ -50,6 +57,18 @@ struct {
   __type(key, __u32);
   __type(value, __u64);
 } cache_misses SEC(".maps");
+
+struct page_fault_stats {
+  u64 minor_faults;
+  u64 major_faults;
+};
+
+struct {
+  __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+  __uint(max_entries, MAX_ENTRIES);
+  __type(key, __u32);
+  __type(value, struct page_fault_stats);
+} page_fault SEC(".maps");
 
 // runq latency
 SEC("tp_btf/sched_wakeup")
@@ -155,6 +174,33 @@ int handle_cache_misses(struct bpf_perf_event_data* ctx) {
   } else {
     u64 initial_count = 1;
     bpf_map_update_elem(&cache_misses, &pid, &initial_count, BPF_ANY);
+  }
+
+  return 0;
+}
+
+SEC("kretprobe/handle_mm_fault")
+int BPF_KRETPROBE(handle_mm_fault_ret, int ret) {
+  if (ret & VM_FAULT_ERROR)
+    return 0;
+
+  __u64 pid_tgid = bpf_get_current_pid_tgid();
+  __u32 pid = pid_tgid >> 32;
+
+  struct page_fault_stats* stats = bpf_map_lookup_elem(&page_fault, &pid);
+
+  if (stats == NULL) {
+    struct page_fault_stats new_stats = {0};
+    bpf_map_update_elem(&page_fault, &pid, &new_stats, BPF_ANY);
+    stats = bpf_map_lookup_elem(&page_fault, &pid);
+    if (stats == NULL)
+      return 0;
+  }
+
+  if (ret & VM_FAULT_MAJOR) {
+    stats->major_faults += 1;
+  } else {
+    stats->minor_faults += 1;
   }
 
   return 0;

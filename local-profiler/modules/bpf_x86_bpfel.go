@@ -21,16 +21,24 @@ type bpfIoStats struct {
 	WriteCount uint64
 }
 
+type bpfPageFaultStats struct {
+	_           structs.HostLayout
+	MinorFaults uint64
+	MajorFaults uint64
+}
+
 // Names of all BPF objects in the ELF.
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
 	bpfMapCacheMisses        = "cache_misses"
+	bpfMapPageFault          = "page_fault"
 	bpfMapProcessIoStats     = "process_io_stats"
 	bpfMapRunqHistogram      = "runq_histogram"
 	bpfMapSchedTimes         = "sched_times"
 	bpfMapSwitchCounts       = "switch_counts"
 	bpfProgHandleCacheMisses = "handle_cache_misses"
+	bpfProgHandleMmFaultRet  = "handle_mm_fault_ret"
 	bpfProgHandleSchedSwitch = "handle_sched_switch"
 	bpfProgHandleSchedWakeup = "handle_sched_wakeup"
 	bpfProgVfsReadRet        = "vfs_read_ret"
@@ -80,6 +88,7 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	HandleCacheMisses *ebpf.ProgramSpec `ebpf:"handle_cache_misses"`
+	HandleMmFaultRet  *ebpf.ProgramSpec `ebpf:"handle_mm_fault_ret"`
 	HandleSchedSwitch *ebpf.ProgramSpec `ebpf:"handle_sched_switch"`
 	HandleSchedWakeup *ebpf.ProgramSpec `ebpf:"handle_sched_wakeup"`
 	VfsReadRet        *ebpf.ProgramSpec `ebpf:"vfs_read_ret"`
@@ -91,6 +100,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	CacheMisses    *ebpf.MapSpec `ebpf:"cache_misses"`
+	PageFault      *ebpf.MapSpec `ebpf:"page_fault"`
 	ProcessIoStats *ebpf.MapSpec `ebpf:"process_io_stats"`
 	RunqHistogram  *ebpf.MapSpec `ebpf:"runq_histogram"`
 	SchedTimes     *ebpf.MapSpec `ebpf:"sched_times"`
@@ -124,6 +134,7 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	CacheMisses    *ebpf.Map `ebpf:"cache_misses"`
+	PageFault      *ebpf.Map `ebpf:"page_fault"`
 	ProcessIoStats *ebpf.Map `ebpf:"process_io_stats"`
 	RunqHistogram  *ebpf.Map `ebpf:"runq_histogram"`
 	SchedTimes     *ebpf.Map `ebpf:"sched_times"`
@@ -133,6 +144,7 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.CacheMisses,
+		m.PageFault,
 		m.ProcessIoStats,
 		m.RunqHistogram,
 		m.SchedTimes,
@@ -151,6 +163,7 @@ type bpfVariables struct {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	HandleCacheMisses *ebpf.Program `ebpf:"handle_cache_misses"`
+	HandleMmFaultRet  *ebpf.Program `ebpf:"handle_mm_fault_ret"`
 	HandleSchedSwitch *ebpf.Program `ebpf:"handle_sched_switch"`
 	HandleSchedWakeup *ebpf.Program `ebpf:"handle_sched_wakeup"`
 	VfsReadRet        *ebpf.Program `ebpf:"vfs_read_ret"`
@@ -160,6 +173,7 @@ type bpfPrograms struct {
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.HandleCacheMisses,
+		p.HandleMmFaultRet,
 		p.HandleSchedSwitch,
 		p.HandleSchedWakeup,
 		p.VfsReadRet,
