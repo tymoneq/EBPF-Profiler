@@ -10,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 
+	prometheusserver "local-profiler/prometheus-server"
+
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -61,6 +63,7 @@ func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan
 }
 
 func main() {
+	prometheusserver.ConnectToPrometheus()
 
 	errChan := make(chan error, NUMBER_OF_GO_ROUTINES)
 
