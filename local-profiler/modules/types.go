@@ -5,11 +5,19 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 )
 
 // Magiczna komenda, która łączy C z Go. Kompiluje kod pod architekturę x86_64.
+//
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target amd64 bpf profiler.bpf.c
+type HookType int32
+
+const (
+	AttachTracing = iota
+	Kretprobe
+)
 
 type BPFObject struct {
 	Objs    bpfObjects
@@ -34,31 +42,44 @@ func appendTracepoint(err error, tp *link.Link, arr *[]link.Link) error {
 	return nil
 }
 
+func linkTracepoint(arr *[]link.Link, HandleSchedSwitch *ebpf.Program, hookType HookType, kprogeName string) error {
+
+	if hookType == AttachTracing {
+		tp, err := link.AttachTracing(link.TracingOptions{Program: HandleSchedSwitch})
+		if err := appendTracepoint(err, &tp, arr); err != nil {
+			return err
+		}
+	} else if hookType == Kretprobe {
+		tp, err := link.Kretprobe(kprogeName, HandleSchedSwitch, nil)
+		if err := appendTracepoint(err, &tp, arr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (o *BPFObject) LoadAllTracepoints() ([]link.Link, error) {
+	const NUMBER_OF_TRACE_POINTS = 10
+	arr := make([]link.Link, 0, NUMBER_OF_TRACE_POINTS)
 
-	arr := make([]link.Link, 0, 10)
-
-	tp, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleSchedSwitch})
-	if err := appendTracepoint(err, &tp, &arr); err != nil {
+	if err := linkTracepoint(&arr, o.Objs.HandleSchedSwitch, AttachTracing, ""); err != nil {
 		return nil, err
 	}
 
-	sched_wakeup, err := link.AttachTracing(link.TracingOptions{Program: o.Objs.HandleSchedWakeup})
-	if err := appendTracepoint(err, &sched_wakeup, &arr); err != nil {
+	if err := linkTracepoint(&arr, o.Objs.HandleSchedWakeup, AttachTracing, ""); err != nil {
 		return nil, err
 	}
 
-	tpIssue, err := link.Kretprobe("vfs_read", o.Objs.VfsReadRet, nil)
-	if err := appendTracepoint(err, &tpIssue, &arr); err != nil {
+	if err := linkTracepoint(&arr, o.Objs.VfsReadRet, Kretprobe, "vfs_read"); err != nil {
 		return nil, err
 	}
 
-	tpComplete, err := link.Kretprobe("vfs_write", o.Objs.VfsWriteRet, nil)
-	if err := appendTracepoint(err, &tpComplete, &arr); err != nil {
+	if err := linkTracepoint(&arr, o.Objs.VfsWriteRet, Kretprobe, "vfs_write"); err != nil {
 		return nil, err
 	}
-	pageFault, err := link.Kretprobe("handle_mm_fault", o.Objs.HandleMmFaultRet, nil)
-	if err := appendTracepoint(err, &pageFault, &arr); err != nil {
+
+	if err := linkTracepoint(&arr, o.Objs.HandleMmFaultRet, Kretprobe, "handle_mm_fault"); err != nil {
 		return nil, err
 	}
 
