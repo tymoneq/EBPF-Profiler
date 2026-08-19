@@ -13,7 +13,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-const NUMBER_OF_GO_ROUTINES int32 = 4
+const NUMBER_OF_GO_ROUTINES int32 = 5
 
 func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -53,6 +53,11 @@ func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan
 			errChan <- err
 		}
 	}()
+	go func() {
+		if err := obj.PageFaults(sync); err != nil {
+			errChan <- err
+		}
+	}()
 }
 
 func main() {
@@ -86,6 +91,8 @@ func main() {
 	}()
 
 	runGoRoutines(obj, sync, errChan)
+
+	fmt.Println("Enter ctrl-c to stop profiler\n")
 	select {
 	case <-sync.Ctx.Done():
 		fmt.Println("\nMain: Shutdown signal received. Waiting for goroutines to save files...")

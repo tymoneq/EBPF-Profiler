@@ -33,7 +33,6 @@ func (o BPFObject) CacheMisses(sync *SyncStruct) error {
 		}
 	}()
 
-	fmt.Printf("%d\n", o.NumCPUs)
 	for cpu := 0; cpu < o.NumCPUs; cpu++ {
 		attr := unix.PerfEventAttr{
 			Type:   unix.PERF_TYPE_HARDWARE,
