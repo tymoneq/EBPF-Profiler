@@ -9,38 +9,31 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type metrics struct {
-	opsProcessed prometheus.Counter
-}
+var cacheMisses *prometheus.GaugeVec
 
-func newMetrics(reg prometheus.Registerer) *metrics {
-	m := &metrics{
-		opsProcessed: promauto.With(reg).NewCounter(prometheus.CounterOpts{
-			Name: "myapp_processed_ops_total",
-			Help: "The total number of processed events",
-		}),
-	}
-	return m
-}
+func SaveMetrics(PID string, totalCount int64) error {
 
-func recordMetrics(m *metrics) {
-	go func() {
-		for {
-			m.opsProcessed.Inc()
-			time.Sleep(2 * time.Second)
-		}
-	}()
+	cacheMisses.WithLabelValues(PID).Set(float64(totalCount))
+
+	return nil
 }
 
 func ConnectToPrometheus(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
+
+	cacheMisses = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "cache_misses_total",
+			Help: "Number of cache misses from PID",
+		}, []string{"PID"},
+	)
+
 	reg := prometheus.NewRegistry()
-	m := newMetrics(reg)
-	recordMetrics(m)
+
+	reg.MustRegister(cacheMisses)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))

@@ -4,35 +4,13 @@ import (
 	"fmt"
 	synchronization "local-profiler/synchronization"
 	"log"
-	"time"
 
-	"github.com/cilium/ebpf"
 	"golang.org/x/sys/unix"
 )
 
 const SAMPLE_PERIOD = 10_000
 
-func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
-	defer sync.Wg.Done()
-	zeroValues := make([]uint64, o.NumCPUs)
-
-	outFile, err := OpenFile("cacheMisses.log")
-	if err != nil {
-		log.Printf("Error opening a file : %v\n", err)
-		return err
-	}
-	defer outFile.Close()
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	var perfFDs []int
-
-	defer func() {
-		for _, fd := range perfFDs {
-			unix.Close(fd)
-		}
-	}()
+func (o BPFObject) createPerfEvents(perfFDs *[]int) error {
 
 	for cpu := 0; cpu < o.NumCPUs; cpu++ {
 		attr := unix.PerfEventAttr{
@@ -56,53 +34,41 @@ func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 			log.Printf("Error ioctl Enable : %v\n", err)
 			continue
 		}
-		perfFDs = append(perfFDs, fd)
+		*perfFDs = append(*perfFDs, fd)
 	}
 
-	if len(perfFDs) == 0 {
+	if len(*perfFDs) == 0 {
 		return fmt.Errorf("Couldn't hook PMU to any core\n")
 	}
 
-	fmt.Println("CPU Profiler is working, listening for cache misses...")
+	return nil
+}
 
-	for {
+func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
+	defer sync.Wg.Done()
 
-		select {
-		case <-sync.Ctx.Done():
-			fmt.Println("closing cache misses")
-			return nil
+	var perfFDs []int
 
-		case t := <-ticker.C:
-
-			t = time.Now()
-			t.Format("2006-01-02 15:04:05")
-
-			outFile.WriteString("---Cache misses---\n")
-			outFile.WriteString(t.Format("2006-01-02 15:04:05") + "\n")
-
-			var pid uint32
-			var sampleCount []uint64
-			var iter = o.Objs.CacheMisses.Iterate()
-
-			for iter.Next(&pid, &sampleCount) {
-				userName := getUserForPID(pid)
-
-				var totalCount uint64 = 0
-				for _, coreCount := range sampleCount {
-					totalCount += coreCount
-				}
-
-				totalCount *= SAMPLE_PERIOD
-				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of cache misses: %d\n", pid, userName, totalCount)
-
-				outFile.WriteString(myString)
-
-				err := o.Objs.CacheMisses.Update(pid, zeroValues, ebpf.UpdateAny)
-				if err != nil {
-					log.Printf("Failed to reset key %d: %v", pid, err)
-					return err
-				}
-			}
+	defer func() {
+		for _, fd := range perfFDs {
+			unix.Close(fd)
 		}
+	}()
+
+	if err := o.createPerfEvents(&perfFDs); err != nil {
+		return err
 	}
+
+	zeroValues := make([]uint64, o.NumCPUs)
+
+	profiler := ProfilerStruct{
+		TimeInterval:    5,
+		FileName:        "cacheMisses",
+		ProfilerMessage: "CPU Profiler is working, listening for cache misses...",
+		sync:            sync,
+	}
+
+	return RunGoRoutine(&profiler, o.Objs.CacheMisses, &zeroValues)
+	//			prometheusserver.SaveMetrics(strconv.Itoa(int(pid)), int64(totalCount))
+
 }

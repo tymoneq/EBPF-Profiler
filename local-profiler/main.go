@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"local-profiler/modules"
+	modules "local-profiler/modules"
 	prometheusserver "local-profiler/prometheus-server"
-	sync "local-profiler/synchronization"
 	synchronization "local-profiler/synchronization"
 	"log"
 	"runtime"
@@ -59,7 +58,7 @@ func main() {
 
 	errChan := make(chan error, NUMBER_OF_GO_ROUTINES)
 
-	sync, stop := sync.CreateSignalHandling(NUMBER_OF_GO_ROUTINES)
+	sync, stop := synchronization.CreateSignalHandling(NUMBER_OF_GO_ROUTINES)
 	defer stop()
 
 	if err := rlimit.RemoveMemlock(); err != nil {
