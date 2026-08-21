@@ -62,6 +62,7 @@ func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 	zeroValues := make([]uint64, o.NumCPUs)
 
 	profiler := ProfilerStruct{
+		SamplePeriod:    SAMPLE_PERIOD,
 		TimeInterval:    5,
 		FileName:        "cacheMisses",
 		ProfilerMessage: "CPU Profiler is working, listening for cache misses...",

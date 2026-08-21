@@ -9,6 +9,7 @@ func (o BPFObject) ContextSwitches(sync *synchronization.SyncStruct) error {
 	zeroValues := make([]uint64, o.NumCPUs)
 
 	profiler := ProfilerStruct{
+		SamplePeriod:    1,
 		TimeInterval:    1,
 		FileName:        "contexSwitches",
 		ProfilerMessage: "CPU Profiler is working, listening for context switches...",

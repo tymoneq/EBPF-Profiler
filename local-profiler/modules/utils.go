@@ -14,6 +14,7 @@ import (
 )
 
 type ProfilerStruct struct {
+	SamplePeriod    uint64
 	TimeInterval    int
 	FileName        string
 	ProfilerMessage string
@@ -62,7 +63,7 @@ func RunGoRoutine(profiler *ProfilerStruct, hook *ebpf.Map, zeroValues *[]uint64
 					totalCount += coreCount
 				}
 
-				totalCount *= SAMPLE_PERIOD
+				totalCount *= profiler.SamplePeriod
 				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %d\n", pid, userName, profiler.FileName, totalCount)
 				outFile.WriteString(myString)
 
