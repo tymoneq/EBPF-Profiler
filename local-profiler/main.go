@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"local-profiler/modules"
+	prometheusserver "local-profiler/prometheus-server"
 	"log"
 	"os/signal"
 	"runtime"
@@ -13,7 +14,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-const NUMBER_OF_GO_ROUTINES int32 = 5
+const NUMBER_OF_GO_ROUTINES int32 = 6
 
 func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -27,6 +28,15 @@ func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
 	}
 
 	return sync, stop
+}
+
+func runServer(sync *modules.SyncStruct, errChan chan<- error) {
+
+	go func() {
+		if err := prometheusserver.ConnectToPrometheus(sync); err != nil {
+			errChan <- err
+		}
+	}()
 }
 
 func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan<- error) {
@@ -90,6 +100,7 @@ func main() {
 		}
 	}()
 
+	runServer(sync, errChan)
 	runGoRoutines(obj, sync, errChan)
 
 	fmt.Println("Enter ctrl-c to stop profiler\n")
