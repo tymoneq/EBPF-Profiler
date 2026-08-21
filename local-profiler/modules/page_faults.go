@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	synchronization "local-profiler/synchronization"
 	"log"
 	"time"
 
@@ -13,7 +14,7 @@ type PageFaultStruct struct {
 	MajorFaults uint64
 }
 
-func (o BPFObject) PageFaults(sync *SyncStruct) error {
+func (o BPFObject) PageFaults(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 
 	outFile, err := OpenFile("pageFaults.log")

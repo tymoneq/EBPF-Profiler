@@ -2,13 +2,14 @@ package modules
 
 import (
 	"fmt"
+	synchronization "local-profiler/synchronization"
 	"log"
 	"time"
 
 	"github.com/cilium/ebpf"
 )
 
-func (o BPFObject) ContextSwitches(sync *SyncStruct) error {
+func (o BPFObject) ContextSwitches(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 
 	outFile, err := OpenFile("contexStiches.log")

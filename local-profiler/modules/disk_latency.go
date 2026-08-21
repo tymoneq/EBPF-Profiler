@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	synchronization "local-profiler/synchronization"
 	"log"
 	"time"
 
@@ -15,7 +16,7 @@ type IOStats struct {
 	WriteCount uint64
 }
 
-func (o BPFObject) GetDiskLatency(sync *SyncStruct) error {
+func (o BPFObject) GetDiskLatency(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 
 	zeroValues := make([]IOStats, o.NumCPUs)

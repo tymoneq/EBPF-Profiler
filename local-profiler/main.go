@@ -1,36 +1,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"local-profiler/modules"
 	prometheusserver "local-profiler/prometheus-server"
+	sync "local-profiler/synchronization"
+	synchronization "local-profiler/synchronization"
 	"log"
-	"os/signal"
 	"runtime"
-	"sync"
-	"syscall"
 
 	"github.com/cilium/ebpf/rlimit"
 )
 
 const NUMBER_OF_GO_ROUTINES int32 = 6
 
-func createSignalHandling() (*modules.SyncStruct, context.CancelFunc) {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-
-	var wg sync.WaitGroup
-	wg.Add(int(NUMBER_OF_GO_ROUTINES))
-
-	sync := &modules.SyncStruct{
-		Ctx: ctx,
-		Wg:  &wg,
-	}
-
-	return sync, stop
-}
-
-func runServer(sync *modules.SyncStruct, errChan chan<- error) {
+func runServer(sync *synchronization.SyncStruct, errChan chan<- error) {
 
 	go func() {
 		if err := prometheusserver.ConnectToPrometheus(sync); err != nil {
@@ -39,7 +23,7 @@ func runServer(sync *modules.SyncStruct, errChan chan<- error) {
 	}()
 }
 
-func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan<- error) {
+func runGoRoutines(obj modules.BPFObject, sync *synchronization.SyncStruct, errChan chan<- error) {
 
 	go func() {
 		if err := obj.ContextSwitches(sync); err != nil {
@@ -71,10 +55,11 @@ func runGoRoutines(obj modules.BPFObject, sync *modules.SyncStruct, errChan chan
 }
 
 func main() {
+	fmt.Println("Enter ctrl-c to stop profiler\n")
 
 	errChan := make(chan error, NUMBER_OF_GO_ROUTINES)
 
-	sync, stop := createSignalHandling()
+	sync, stop := sync.CreateSignalHandling(NUMBER_OF_GO_ROUTINES)
 	defer stop()
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -103,7 +88,6 @@ func main() {
 	runServer(sync, errChan)
 	runGoRoutines(obj, sync, errChan)
 
-	fmt.Println("Enter ctrl-c to stop profiler\n")
 	select {
 	case <-sync.Ctx.Done():
 		fmt.Println("\nMain: Shutdown signal received. Waiting for goroutines to save files...")

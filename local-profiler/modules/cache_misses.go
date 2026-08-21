@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	synchronization "local-profiler/synchronization"
 	"log"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 const SAMPLE_PERIOD = 10_000
 
-func (o BPFObject) CacheMisses(sync *SyncStruct) error {
+func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 	zeroValues := make([]uint64, o.NumCPUs)
 

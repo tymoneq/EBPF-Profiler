@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	synchronization "local-profiler/synchronization"
+
 	"github.com/cilium/ebpf"
 )
 
@@ -17,7 +19,7 @@ type HistogramBucket struct {
 	Count      uint64
 }
 
-func (o BPFObject) RunqLatency(sync *SyncStruct) error {
+func (o BPFObject) RunqLatency(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 
 	outFile, err := OpenFile("runqLatency.log")

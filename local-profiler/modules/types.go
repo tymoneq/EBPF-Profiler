@@ -1,9 +1,7 @@
 package modules
 
 import (
-	"context"
 	"fmt"
-	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -22,11 +20,6 @@ const (
 type BPFObject struct {
 	Objs    bpfObjects
 	NumCPUs int
-}
-
-type SyncStruct struct {
-	Ctx context.Context
-	Wg  *sync.WaitGroup
 }
 
 func LoadBPFObjects(o *bpfObjects) error {

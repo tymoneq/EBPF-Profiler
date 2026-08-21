@@ -3,7 +3,7 @@ package prometheusserver
 import (
 	"context"
 	"fmt"
-	"local-profiler/modules"
+	synchronization "local-profiler/synchronization"
 	"log"
 	"net/http"
 	"time"
@@ -36,7 +36,7 @@ func recordMetrics(m *metrics) {
 	}()
 }
 
-func ConnectToPrometheus(sync *modules.SyncStruct) error {
+func ConnectToPrometheus(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 	reg := prometheus.NewRegistry()
 	m := newMetrics(reg)
