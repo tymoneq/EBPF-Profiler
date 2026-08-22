@@ -16,7 +16,6 @@ func (o BPFObject) ContextSwitches(sync *synchronization.SyncStruct) error {
 
 	profilerData := ProfilerData[ProfilerUint]{
 		zeroValues: &[]ProfilerUint{},
-		data:       &[]ProfilerUint{},
 	}
 
 	return RunGoRoutine(&profiler, o.Objs.SwitchCounts, profilerData)

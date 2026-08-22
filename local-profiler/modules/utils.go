@@ -30,7 +30,6 @@ func (u ProfilerUint) Mul(scalar uint64) ProfilerUint {
 
 type ProfilerData[T Combinable[T]] struct {
 	zeroValues *[]T
-	data       *[]T
 	totalCount *T
 }
 
@@ -70,7 +69,7 @@ func writeDataHeader(t time.Time, FileName *string, outFile *os.File) {
 	t = time.Now()
 	t.Format("2006-01-02 15:04:05")
 
-	outString := fmt.Sprintf("---%s---\n", FileName)
+	outString := fmt.Sprintf("---%s---\n", *FileName)
 	outFile.WriteString(outString)
 	outFile.WriteString(t.Format("2006-01-02 15:04:05") + "\n")
 
@@ -102,22 +101,23 @@ func RunGoRoutine[T Combinable[T]](profiler *ProfilerStruct, hook *ebpf.Map, pro
 			writeDataHeader(t, &profiler.FileName, outFile)
 
 			var pid uint32
+			var data []T
 			var iter = hook.Iterate()
 
-			for iter.Next(&pid, &profData.data) {
+			for iter.Next(&pid, &data) {
 				userName := getUserForPID(pid)
 
 				profData.ResetTotalCount()
-				for _, coreCount := range *profData.data {
+				for _, coreCount := range data {
 					profData.AddToTotal(coreCount)
 				}
 
 				profData.MulToTotal(profiler.SamplePeriod)
 
-				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %v+\n", pid, userName, profiler.FileName, profData.totalCount)
+				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %+v\n", pid, userName, profiler.FileName, *profData.totalCount)
 				outFile.WriteString(myString)
 
-				err := hook.Update(pid, profData.zeroValues, ebpf.UpdateAny)
+				err := hook.Update(pid, (*profData.zeroValues), ebpf.UpdateAny)
 				if err != nil {
 					log.Printf("Failed to reset key %d: %v", pid, err)
 					return err

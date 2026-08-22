@@ -68,7 +68,6 @@ func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 	}
 	profilerData := ProfilerData[ProfilerUint]{
 		zeroValues: &[]ProfilerUint{},
-		data:       &[]ProfilerUint{},
 	}
 
 	return RunGoRoutine(&profiler, o.Objs.CacheMisses, profilerData)
