@@ -13,7 +13,22 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type ProfilerData[T any] struct {
+type Combinable[T any] interface {
+	Add(other T) T
+	Mul(scalar uint64) T
+}
+
+type ProfilerUint uint64
+
+func (u ProfilerUint) Add(other ProfilerUint) ProfilerUint {
+	return u + other
+}
+
+func (u ProfilerUint) Mul(other ProfilerUint) ProfilerUint {
+	return u * other
+}
+
+type ProfilerData[T Combinable[T]] struct {
 	zeroValues *[]T
 	data       *[]T
 	totalCount *T
@@ -27,6 +42,20 @@ type ProfilerStruct struct {
 	sync            *synchronization.SyncStruct
 }
 
+func (p *ProfilerData[T]) AddToTotal(val T) {
+	if p.totalCount == nil {
+		p.totalCount = new(T)
+	}
+	*p.totalCount = (*p.totalCount).Add(val)
+}
+
+func (p *ProfilerData[T]) MulToTotal(scalar uint64) {
+	if p.totalCount == nil {
+		p.totalCount = new(T)
+	}
+	*p.totalCount = (*p.totalCount).Mul(scalar)
+}
+
 func writeDataHeader(t time.Time, FileName *string, outFile *os.File) {
 
 	t = time.Now()
@@ -38,7 +67,7 @@ func writeDataHeader(t time.Time, FileName *string, outFile *os.File) {
 
 }
 
-func RunGoRoutine[T any](profiler *ProfilerStruct, hook *ebpf.Map, profData ProfilerData[T]) error {
+func RunGoRoutine[T Combinable[T]](profiler *ProfilerStruct, hook *ebpf.Map, profData ProfilerData[T]) error {
 
 	outFile, err := OpenFile(profiler.FileName + ".log")
 	if err != nil {
@@ -71,10 +100,11 @@ func RunGoRoutine[T any](profiler *ProfilerStruct, hook *ebpf.Map, profData Prof
 
 				totalCount := (*profData.totalCount)
 				for _, coreCount := range *profData.data {
-					totalCount += coreCount
+					profData.AddToTotal(coreCount)
 				}
 
-				totalCount *= profiler.SamplePeriod
+				profData.MulToTotal(ProfilerUint(profiler.SamplePeriod))
+
 				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %d\n", pid, userName, profiler.FileName, totalCount)
 				outFile.WriteString(myString)
 

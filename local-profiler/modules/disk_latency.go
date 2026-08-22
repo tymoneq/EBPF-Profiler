@@ -16,6 +16,24 @@ type IOStats struct {
 	WriteCount uint64
 }
 
+func (s IOStats) Add(other IOStats) IOStats {
+	return IOStats{
+		ReadBytes:  s.ReadBytes + other.ReadBytes,
+		WriteBytes: s.WriteBytes + other.WriteBytes,
+		ReadCount:  s.ReadCount + other.ReadCount,
+		WriteCount: s.WriteCount + other.WriteCount,
+	}
+}
+
+func (s IOStats) Mul(scalar uint64) IOStats {
+	return IOStats{
+		ReadBytes:  s.ReadBytes * scalar,
+		WriteBytes: s.WriteBytes * scalar,
+		ReadCount:  s.ReadCount * scalar,
+		WriteCount: s.WriteCount * scalar,
+	}
+}
+
 func (o BPFObject) GetDiskLatency(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
 
