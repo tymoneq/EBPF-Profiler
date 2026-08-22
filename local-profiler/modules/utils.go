@@ -56,6 +56,15 @@ func (p *ProfilerData[T]) MulToTotal(scalar uint64) {
 	*p.totalCount = (*p.totalCount).Mul(scalar)
 }
 
+func (p *ProfilerData[T]) ResetTotalCount() {
+	if p.totalCount == nil {
+		p.totalCount = new(T)
+	} else {
+		*p.totalCount = *new(T)
+	}
+
+}
+
 func writeDataHeader(t time.Time, FileName *string, outFile *os.File) {
 
 	t = time.Now()
@@ -98,12 +107,12 @@ func RunGoRoutine[T Combinable[T]](profiler *ProfilerStruct, hook *ebpf.Map, pro
 			for iter.Next(&pid, &profData.data) {
 				userName := getUserForPID(pid)
 
-				totalCount := (*profData.totalCount)
+				profData.ResetTotalCount()
 				for _, coreCount := range *profData.data {
 					profData.AddToTotal(coreCount)
 				}
 
-				profData.MulToTotal(ProfilerUint(profiler.SamplePeriod))
+				profData.MulToTotal(profiler.SamplePeriod)
 
 				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %d\n", pid, userName, profiler.FileName, totalCount)
 				outFile.WriteString(myString)
