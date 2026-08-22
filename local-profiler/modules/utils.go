@@ -24,8 +24,8 @@ func (u ProfilerUint) Add(other ProfilerUint) ProfilerUint {
 	return u + other
 }
 
-func (u ProfilerUint) Mul(other ProfilerUint) ProfilerUint {
-	return u * other
+func (u ProfilerUint) Mul(scalar uint64) ProfilerUint {
+	return u * ProfilerUint(scalar)
 }
 
 type ProfilerData[T Combinable[T]] struct {
@@ -114,7 +114,7 @@ func RunGoRoutine[T Combinable[T]](profiler *ProfilerStruct, hook *ebpf.Map, pro
 
 				profData.MulToTotal(profiler.SamplePeriod)
 
-				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %d\n", pid, userName, profiler.FileName, totalCount)
+				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %v+\n", pid, userName, profiler.FileName, profData.totalCount)
 				outFile.WriteString(myString)
 
 				err := hook.Update(pid, profData.zeroValues, ebpf.UpdateAny)

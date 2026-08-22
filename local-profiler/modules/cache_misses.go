@@ -59,8 +59,6 @@ func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 		return err
 	}
 
-	zeroValues := make([]uint64, o.NumCPUs)
-
 	profiler := ProfilerStruct{
 		SamplePeriod:    SAMPLE_PERIOD,
 		TimeInterval:    5,
@@ -68,8 +66,12 @@ func (o BPFObject) CacheMisses(sync *synchronization.SyncStruct) error {
 		ProfilerMessage: "CPU Profiler is working, listening for cache misses...",
 		sync:            sync,
 	}
+	profilerData := ProfilerData[ProfilerUint]{
+		zeroValues: &[]ProfilerUint{},
+		data:       &[]ProfilerUint{},
+	}
 
-	return RunGoRoutine(&profiler, o.Objs.CacheMisses, &zeroValues)
+	return RunGoRoutine(&profiler, o.Objs.CacheMisses, profilerData)
 	//			prometheusserver.SaveMetrics(strconv.Itoa(int(pid)), int64(totalCount))
 
 }

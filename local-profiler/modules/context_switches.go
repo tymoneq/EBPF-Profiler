@@ -6,8 +6,6 @@ import (
 
 func (o BPFObject) ContextSwitches(sync *synchronization.SyncStruct) error {
 	defer sync.Wg.Done()
-	zeroValues := make([]uint64, o.NumCPUs)
-
 	profiler := ProfilerStruct{
 		SamplePeriod:    1,
 		TimeInterval:    1,
@@ -16,5 +14,10 @@ func (o BPFObject) ContextSwitches(sync *synchronization.SyncStruct) error {
 		sync:            sync,
 	}
 
-	return RunGoRoutine(&profiler, o.Objs.SwitchCounts, &zeroValues)
+	profilerData := ProfilerData[ProfilerUint]{
+		zeroValues: &[]ProfilerUint{},
+		data:       &[]ProfilerUint{},
+	}
+
+	return RunGoRoutine(&profiler, o.Objs.SwitchCounts, profilerData)
 }
