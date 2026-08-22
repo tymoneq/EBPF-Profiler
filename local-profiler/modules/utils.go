@@ -13,6 +13,12 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type ProfilerData[T any] struct {
+	zeroValues *[]T
+	data       *[]T
+	totalCount *T
+}
+
 type ProfilerStruct struct {
 	SamplePeriod    uint64
 	TimeInterval    int
@@ -21,7 +27,18 @@ type ProfilerStruct struct {
 	sync            *synchronization.SyncStruct
 }
 
-func RunGoRoutine(profiler *ProfilerStruct, hook *ebpf.Map, zeroValues *[]uint64) error {
+func writeDataHeader(t time.Time, FileName *string, outFile *os.File) {
+
+	t = time.Now()
+	t.Format("2006-01-02 15:04:05")
+
+	outString := fmt.Sprintf("---%s---\n", FileName)
+	outFile.WriteString(outString)
+	outFile.WriteString(t.Format("2006-01-02 15:04:05") + "\n")
+
+}
+
+func RunGoRoutine[T any](profiler *ProfilerStruct, hook *ebpf.Map, profData ProfilerData[T]) error {
 
 	outFile, err := OpenFile(profiler.FileName + ".log")
 	if err != nil {
@@ -44,22 +61,16 @@ func RunGoRoutine(profiler *ProfilerStruct, hook *ebpf.Map, zeroValues *[]uint64
 
 		case t := <-ticker.C:
 
-			t = time.Now()
-			t.Format("2006-01-02 15:04:05")
-
-			outString := fmt.Sprintf("---%s---\n", profiler.FileName)
-			outFile.WriteString(outString)
-			outFile.WriteString(t.Format("2006-01-02 15:04:05") + "\n")
+			writeDataHeader(t, &profiler.FileName, outFile)
 
 			var pid uint32
-			var sampleCount []uint64
 			var iter = hook.Iterate()
 
-			for iter.Next(&pid, &sampleCount) {
+			for iter.Next(&pid, &profData.data) {
 				userName := getUserForPID(pid)
 
-				var totalCount uint64 = 0
-				for _, coreCount := range sampleCount {
+				totalCount := (*profData.totalCount)
+				for _, coreCount := range *profData.data {
 					totalCount += coreCount
 				}
 
@@ -67,7 +78,7 @@ func RunGoRoutine(profiler *ProfilerStruct, hook *ebpf.Map, zeroValues *[]uint64
 				myString := fmt.Sprintf("PID : %d USERNAME : %s , number of %s: %d\n", pid, userName, profiler.FileName, totalCount)
 				outFile.WriteString(myString)
 
-				err := hook.Update(pid, *zeroValues, ebpf.UpdateAny)
+				err := hook.Update(pid, profData.zeroValues, ebpf.UpdateAny)
 				if err != nil {
 					log.Printf("Failed to reset key %d: %v", pid, err)
 					return err
